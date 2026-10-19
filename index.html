@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COTTY — the multiplayer terminal</title>
+<meta name="description" content="Host your shell, let teammates join from a terminal or a browser — watch together, type together. End-to-end encrypted, per-guest permissions, recording and an audit trail. One Go binary, MIT licensed.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="COTTY — the multiplayer terminal">
+<meta property="og:description" content="Your shell. Your guests. Your rules. A shared live terminal with E2EE, permissions, presence and an audit trail.">
+<meta name="theme-color" content="#060607">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23060607'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='20' font-weight='bold' fill='%23ff9500' text-anchor='middle'%3E%3E_%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060607;
+    --bg-2: #0b0b0d;
+    --panel: #0f0f12;
+    --panel-2: #15151a;
+    --border: #23232a;
+    --border-hi: #3a3a44;
+    --text: #efeff1;
+    --muted: #a0a0aa;
+    --dim: #6a6a74;
+    --gold: #ffd75f;
+    --orange: #ff9500;
+    --burnt: #a85400;
+    --green: #5dd1a4;
+    --red: #ff6b6b;
+    --cyan: #6cc7ff;
+    --pink: #ff7ad9;
+    --violet: #a98bff;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans);
+    line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  code, pre, kbd, .mono { font-family: var(--mono); }
+  a { color: var(--orange); text-decoration: none; }
+  ::selection { background: rgba(255,149,0,.32); color: #fff; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
+
+  /* ── backdrop: grid, glow that follows the mouse, film grain, scanlines ── */
+  .bg-grid { position: fixed; inset: 0; z-index: -3; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,149,0,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,149,0,.045) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 85%); }
+  .bg-glow { position: fixed; z-index: -2; pointer-events: none; width: 760px; height: 760px;
+    left: var(--mx, 50%); top: var(--my, 20%); transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255,149,0,.11), transparent 62%);
+    transition: left .25s ease-out, top .25s ease-out; }
+  .bg-grain { position: fixed; inset: -50%; z-index: 50; pointer-events: none; opacity: .05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain 1s steps(6) infinite; }
+  @keyframes grain { 0%{transform:translate(0,0)} 20%{transform:translate(-3%,2%)} 40%{transform:translate(2%,-3%)}
+    60%{transform:translate(-2%,-1%)} 80%{transform:translate(3%,3%)} 100%{transform:translate(0,0)} }
+
+  /* ── nav ── */
+  header.site { position: sticky; top: 0; z-index: 40; backdrop-filter: blur(14px);
+    background: rgba(6,6,7,.72); border-bottom: 1px solid var(--border); }
+  header.site .row { display: flex; align-items: center; justify-content: space-between; height: 62px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-weight: 800;
+    font-size: 18px; letter-spacing: 5px; color: var(--gold); }
+  .brand b { color: var(--orange); }
+  .brand .chip { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--gold), var(--orange)); color: #160b00; font-size: 13px;
+    letter-spacing: 0; box-shadow: 0 0 22px rgba(255,149,0,.45); }
+  nav { display: flex; align-items: center; gap: 26px; }
+  nav a { color: var(--muted); font-size: 14.5px; transition: color .15s; }
+  nav a:hover { color: var(--text); }
+  .gh { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border-hi);
+    border-radius: 10px; padding: 7px 14px; color: var(--text) !important; background: var(--panel); }
+  .gh:hover { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(255,149,0,.12); }
+  .gh svg { width: 16px; height: 16px; fill: currentColor; }
+  .gh.x { padding: 7px 10px; }
+  @media (max-width: 420px) { .pill { font-size: 11.5px; padding-right: 12px; } }
+  @media (max-width: 760px) { nav a:not(.gh) { display: none; } }
+
+  /* ── official CA ── */
+  .ca { display: inline-flex; align-items: center; gap: 12px; max-width: 100%; margin-top: 26px;
+    padding: 10px 10px 10px 16px; border-radius: 14px; border: 1px solid rgba(255,215,95,.35);
+    background: linear-gradient(135deg, rgba(255,215,95,.08), rgba(255,149,0,.04)); font-family: var(--mono);
+    box-shadow: 0 0 0 4px rgba(255,149,0,.05), 0 0 40px -10px rgba(255,149,0,.45); }
+  .ca .tk { flex: none; font-weight: 800; color: #170c00; background: linear-gradient(135deg, var(--gold), var(--orange));
+    border-radius: 8px; padding: 3px 9px; font-size: 13px; }
+  .ca .lb { flex: none; color: var(--dim); font-size: 11.5px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .ca code { min-width: 0; color: var(--gold); font-size: 14px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .ca code::-webkit-scrollbar { display: none; }
+  .ca-warn { margin-top: 10px; font: 12px var(--mono); color: var(--dim); }
+  @media (max-width: 600px) { .ca .lb { display: none; } .ca code { font-size: 12px; } }
+
+  /* ── hero ── */
+  .hero { padding-top: 84px; padding-bottom: 40px; text-align: center; position: relative; }
+  .pill { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--border-hi);
+    border-radius: 999px; padding: 6px 16px 6px 8px; font-size: 13px; color: var(--muted);
+    background: rgba(15,15,18,.8); }
+  .pill .tag { background: rgba(93,209,164,.14); color: var(--green); border-radius: 999px;
+    padding: 2px 9px; font-weight: 700; font-size: 11.5px; letter-spacing: .6px; white-space: nowrap; }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 10px var(--green); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  .banner-wrap { position: relative; margin: 38px auto 4px; width: fit-content; max-width: 100%; }
+  pre.banner { margin: 0; font-family: var(--mono); font-weight: 800; line-height: 1;
+    font-size: clamp(7px, 2.05vw, 22px); text-align: left; user-select: none; white-space: pre;
+    filter: drop-shadow(0 0 26px rgba(255,149,0,.28)); }
+  pre.banner .b-top { color: var(--gold); }
+  pre.banner .b-bot { color: var(--orange); }
+  pre.banner .b-sh { color: var(--burnt); }
+  pre.banner .scr { color: var(--green); }
+  .banner-wrap::after { content: ""; position: absolute; inset: -6px -12px; pointer-events: none;
+    background: repeating-linear-gradient(180deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px); }
+  .tagline { font-family: var(--mono); color: var(--dim); letter-spacing: 6px; font-size: 13px;
+    text-transform: lowercase; margin-top: 10px; }
+
+  h1.headline { font-size: clamp(34px, 6.2vw, 72px); line-height: 1.02; margin: 34px auto 18px;
+    font-weight: 700; letter-spacing: -2px; max-width: 900px; }
+  h1.headline .grad { background: linear-gradient(100deg, var(--gold) 10%, var(--orange) 55%, #ff5e00 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  h1.headline .rot { display: inline-block; min-width: 4ch; text-align: left; }
+  h1.headline .caret { display: inline-block; width: .08em; height: .85em; vertical-align: -.06em;
+    margin-left: .06em; background: var(--orange); animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .sub { color: var(--muted); max-width: 680px; margin: 0 auto 34px; font-size: 18px; }
+
+  .install { display: inline-flex; align-items: center; gap: 14px; max-width: 100%;
+    background: var(--panel); border: 1px solid var(--border-hi); border-radius: 14px;
+    padding: 12px 12px 12px 20px; font-family: var(--mono); font-size: 14.5px;
+    box-shadow: 0 20px 60px -20px rgba(255,149,0,.25); }
+  .install code { min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .install code::-webkit-scrollbar { display: none; }
+  .install .p { color: var(--orange); user-select: none; }
+  .copy { flex: none; border: 1px solid var(--border-hi); background: var(--panel-2); color: var(--text);
+    border-radius: 9px; padding: 7px 12px; font: 600 12.5px var(--mono); cursor: pointer;
+    transition: border-color .15s, color .15s; }
+  .copy:hover { border-color: var(--orange); color: var(--gold); }
+  .copy.ok { border-color: var(--green); color: var(--green); }
+
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 22px; }
+  .btn { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 13px 26px;
+    border-radius: 12px; font-weight: 700; font-size: 15.5px; transition: transform .15s, box-shadow .2s; }
+  .btn:hover { transform: translateY(-2px); }
+  .btn.primary { color: #170c00; background: linear-gradient(135deg, var(--gold), var(--orange));
+    box-shadow: 0 10px 40px -8px rgba(255,149,0,.6), inset 0 1px 0 rgba(255,255,255,.4); }
+  .btn.ghost { color: var(--text); border: 1px solid var(--border-hi); background: rgba(15,15,18,.7); }
+  .btn.ghost:hover { border-color: var(--orange); }
+
+  /* ── demo terminal ── */
+  .stage { margin: 70px auto 0; max-width: 1100px; position: relative; }
+  .stage::before { content: ""; position: absolute; inset: 8% 6% -6%; z-index: -1; filter: blur(70px);
+    background: conic-gradient(from 180deg, rgba(255,149,0,.35), rgba(255,215,95,.12), rgba(108,199,255,.18), rgba(255,122,217,.18), rgba(255,149,0,.35)); }
+  .demo { display: grid; grid-template-columns: 1fr 320px; gap: 0; text-align: left;
+    background: rgba(11,11,13,.92); border: 1px solid var(--border-hi); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 40px 120px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(255,149,0,.06) inset; }
+  .demo > * { min-width: 0; }
+  @media (max-width: 600px) { .term { font-size: 11.5px; height: 400px; padding: 14px; } .audit { height: 220px; } }
+  .demo > * { min-width: 0; }
+  @media (max-width: 600px) { .term { font-size: 11.5px; height: 400px; padding: 14px; } .audit { height: 220px; } }
+  @media (max-width: 900px) { .demo { grid-template-columns: 1fr; } .side { border-left: 0 !important; border-top: 1px solid var(--border); } }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #131317, #0e0e11); }
+  .bar .l { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+  .bar .l:nth-child(2) { background: #febc2e; } .bar .l:nth-child(3) { background: #28c840; }
+  .bar .title { flex: 1; text-align: center; font: 12.5px var(--mono); color: var(--dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar .e2ee { font: 700 11px var(--mono); color: var(--green); border: 1px solid rgba(93,209,164,.35);
+    border-radius: 6px; padding: 2px 7px; letter-spacing: .5px; }
+  .presence { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border);
+    min-height: 50px; flex-wrap: wrap; }
+  .who { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px 4px 4px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--border); font: 600 12px var(--mono);
+    animation: pop .45s cubic-bezier(.2,1.6,.4,1) both; }
+  .who .av { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+    color: #0b0b0d; font-size: 11px; font-weight: 800; }
+  .who .mode { color: var(--dim); font-weight: 400; }
+  .who .mode.rw { color: var(--green); }
+  .who.typing .av { box-shadow: 0 0 0 3px rgba(255,255,255,.08), 0 0 14px currentColor; }
+  .who.gone { animation: out .4s forwards; }
+  @keyframes pop { from { transform: scale(.4); opacity: 0; } }
+  @keyframes out { to { transform: scale(.4); opacity: 0; width: 0; padding: 0; margin: 0; border: 0; } }
+  .presence .count { margin-left: auto; font: 12px var(--mono); color: var(--dim); }
+
+  .term { position: relative; height: 430px; overflow: hidden; padding: 16px 18px; font: 13.5px/1.62 var(--mono);
+    color: #d9d9de; }
+  .term .ln { white-space: pre-wrap; word-break: break-all; min-height: 1.62em; }
+  .term .ps { color: var(--green); } .term .pth { color: var(--cyan); }
+  .term .ct { color: var(--orange); } .term .mute { color: var(--dim); } .term .ok { color: var(--green); }
+  .term .gold { color: var(--gold); } .term .bad { color: var(--red); }
+  .cur { display: inline-block; width: .6em; height: 1.15em; vertical-align: -.2em; animation: blink 1s steps(1) infinite; }
+  .flag { position: relative; }
+  .flag { background: var(--c); }
+  .flag::before { content: attr(data-n); position: absolute; top: -1.35em; left: 0; font-size: 9.5px; font-weight: 700;
+    padding: 0 5px; border-radius: 4px 4px 4px 0; color: #0b0b0d; background: var(--c); white-space: nowrap; line-height: 1.5; }
+  .toast { position: absolute; right: 14px; bottom: 14px; max-width: 80%; font: 12px var(--mono);
+    background: rgba(21,21,26,.96); border: 1px solid var(--border-hi); border-left: 3px solid var(--orange);
+    padding: 9px 12px; border-radius: 9px; color: var(--muted); opacity: 0; transform: translateY(10px);
+    transition: all .35s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: none; }
+
+  .side { border-left: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; }
+  .side h4 { margin: 0; padding: 12px 16px; font: 700 11.5px var(--mono); letter-spacing: 1.5px; color: var(--dim);
+    text-transform: uppercase; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
+  .side h4 .rec { color: var(--red); display: inline-flex; align-items: center; gap: 6px; }
+  .side h4 .rec::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--red);
+    animation: pulse 1.2s infinite; }
+  .audit { flex: 1; padding: 10px 12px; font: 11.2px/1.55 var(--mono); overflow: hidden; height: 300px;
+    display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; }
+  .audit .row { padding: 6px 8px; border-radius: 7px; background: var(--panel); border: 1px solid var(--border);
+    animation: slide .35s ease-out both; word-break: break-all; color: var(--muted); }
+  .audit .row .k { color: var(--gold); } .audit .row .s { color: var(--green); }
+  @keyframes slide { from { opacity: 0; transform: translateX(18px); } }
+  .wire { border-top: 1px solid var(--border); padding: 12px 14px 14px; }
+  .wire .lbl { font: 700 10.5px var(--mono); letter-spacing: 1.4px; color: var(--dim); text-transform: uppercase; margin-bottom: 6px; }
+  .wire .cipher { font: 11px/1.45 var(--mono); color: #3d6b5a; height: 48px; overflow: hidden; word-break: break-all; }
+
+  .demo-caption { text-align: center; color: var(--dim); font-size: 13px; margin-top: 16px; font-family: var(--mono); }
+  .demo-caption button { background: none; border: 0; color: var(--orange); font: inherit; cursor: pointer; text-decoration: underline; }
+
+  /* ── marquee ── */
+  .marquee { margin: 90px 0 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    overflow: hidden; background: rgba(11,11,13,.6); }
+  .marquee .track { display: flex; gap: 46px; padding: 18px 0; width: max-content; animation: scroll 38s linear infinite; }
+  .marquee:hover .track { animation-play-state: paused; }
+  .marquee span { font: 600 15px var(--mono); color: var(--muted); white-space: nowrap; }
+  .marquee span i { font-style: normal; color: var(--orange); margin-right: 10px; }
+  @keyframes scroll { to { transform: translateX(-50%); } }
+
+  /* ── sections ── */
+  section { padding: 110px 0 0; }
+  .eyebrow { font: 700 12px var(--mono); letter-spacing: 3px; color: var(--orange); text-transform: uppercase; }
+  h2 { font-size: clamp(30px, 4.4vw, 52px); line-height: 1.05; letter-spacing: -1.4px; margin: 12px 0 16px; font-weight: 700; }
+  h2 .grad { background: linear-gradient(100deg, var(--gold), var(--orange)); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  .lead { color: var(--muted); font-size: 17.5px; max-width: 640px; margin: 0 0 46px; }
+  .center { text-align: center; } .center .lead { margin-left: auto; margin-right: auto; }
+
+  /* bento */
+  .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .card { position: relative; grid-column: span 2; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 18px; padding: 26px; overflow: hidden; isolation: isolate; transition: border-color .2s, transform .2s; }
+  .card:hover { border-color: var(--border-hi); transform: translateY(-3px); }
+  .card::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .25s;
+    background: radial-gradient(420px circle at var(--x, 50%) var(--y, 50%), rgba(255,149,0,.13), transparent 45%); }
+  .card:hover::before { opacity: 1; }
+  .card.w3 { grid-column: span 3; } .card.w4 { grid-column: span 4; }
+  @media (max-width: 900px) { .bento { grid-template-columns: 1fr 1fr; } .card, .card.w3, .card.w4 { grid-column: span 2; } }
+  @media (min-width: 620px) and (max-width: 900px) { .card.half { grid-column: span 1; } }
+  .card .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 18px;
+    background: rgba(255,149,0,.1); border: 1px solid rgba(255,149,0,.25); color: var(--orange); }
+  .card .ic svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .card h3 { margin: 0 0 8px; font-size: 19px; letter-spacing: -.3px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .card code { font-size: 12.5px; color: var(--gold); background: rgba(255,215,95,.07); padding: 1px 6px; border-radius: 5px; }
+  .mini { margin-top: 20px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; font: 12.5px/1.75 var(--mono); color: var(--muted); overflow-x: auto; white-space: pre; }
+  .mini .c { color: var(--orange); } .mini .g { color: var(--green); } .mini .d { color: var(--dim); } .mini .y { color: var(--gold); }
+
+  /* perms visual */
+  .perm { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+  .perm .p-row { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 11px; padding: 9px 12px; font: 13px var(--mono); }
+  .perm .av { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #0b0b0d; font-size: 11px; }
+  .perm .nm { flex: 1; }
+  .switch { width: 40px; height: 22px; border-radius: 999px; background: var(--border-hi); position: relative; cursor: pointer;
+    transition: background .2s; border: 0; padding: 0; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; transition: transform .2s; }
+  .switch.on { background: var(--green); } .switch.on::after { transform: translateX(18px); }
+  .perm .st { width: 84px; text-align: right; color: var(--dim); font-size: 11.5px; }
+  .perm .st.rw { color: var(--green); }
+  .perm .cmd { color: var(--dim); font: 12px var(--mono); margin-top: 4px; min-height: 1.4em; }
+  .perm .cmd b { color: var(--orange); font-weight: 400; }
+
+  /* e2ee */
+  .e2ee-box { background: var(--panel); border: 1px solid var(--border); border-radius: 22px; padding: 38px; position: relative; overflow: hidden; }
+  .url { font: clamp(12px, 1.7vw, 17px)/1.5 var(--mono); background: var(--bg); border: 1px solid var(--border-hi);
+    border-radius: 14px; padding: 18px 20px; overflow-x: auto; white-space: nowrap; }
+  .url .s { color: var(--muted); } .url .frag { color: var(--gold); background: rgba(255,215,95,.1);
+    border-radius: 6px; padding: 2px 4px; box-shadow: 0 0 0 1px rgba(255,215,95,.35); }
+  .url-note { display: flex; justify-content: flex-end; font: 12px var(--mono); color: var(--gold); margin-top: 10px; gap: 8px; }
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 14px; margin-top: 36px; }
+  @media (max-width: 760px) { .flow { grid-template-columns: 1fr; } .flow .pipe { height: 46px; width: 2px !important; margin: 0 auto; }
+    .flow .pipe .pk { animation-name: pkv !important; } }
+  .node { background: var(--bg); border: 1px solid var(--border-hi); border-radius: 16px; padding: 18px; text-align: center; }
+  .node .t { font: 700 12px var(--mono); letter-spacing: 2px; text-transform: uppercase; color: var(--dim); }
+  .node .v { font: 13px/1.5 var(--mono); margin-top: 10px; min-height: 42px; word-break: break-all; }
+  .node.host .v, .node.guest .v { color: var(--green); }
+  .node.relay { border-style: dashed; } .node.relay .v { color: #4b5c55; }
+  .node .lk { display: inline-block; margin-top: 10px; font: 11px var(--mono); padding: 3px 9px; border-radius: 999px; }
+  .node.host .lk, .node.guest .lk { background: rgba(93,209,164,.12); color: var(--green); }
+  .node.relay .lk { background: rgba(255,107,107,.1); color: var(--red); }
+  .pipe { position: relative; width: 70px; height: 2px; background: linear-gradient(90deg, var(--border-hi), var(--border-hi)); overflow: visible; }
+  .pipe .pk { position: absolute; top: -4px; left: 0; width: 10px; height: 10px; border-radius: 3px; background: var(--orange);
+    box-shadow: 0 0 14px var(--orange); animation: pk 1.8s linear infinite; }
+  .pipe .pk:nth-child(2) { animation-delay: .6s; } .pipe .pk:nth-child(3) { animation-delay: 1.2s; }
+  @keyframes pk { from { left: -5px; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } to { left: calc(100% - 5px); opacity: 0; } }
+  @keyframes pkv { from { top: -5px; left: -4px; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } to { top: calc(100% - 5px); left: -4px; opacity: 0; } }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 34px; }
+  @media (max-width: 760px) { .facts { grid-template-columns: 1fr; } }
+  .fact { border: 1px solid var(--border); border-radius: 14px; padding: 18px; background: var(--bg); }
+  .fact b { display: block; font-size: 15.5px; margin-bottom: 4px; } .fact span { color: var(--muted); font-size: 14px; }
+
+  /* how it works / commands */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tab { border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 10px;
+    padding: 8px 14px; font: 600 13px var(--mono); cursor: pointer; transition: all .15s; }
+  .tab:hover { color: var(--text); }
+  .tab.on { color: #170c00; background: linear-gradient(135deg, var(--gold), var(--orange)); border-color: transparent; }
+  .codebox { position: relative; background: var(--panel); border: 1px solid var(--border-hi); border-radius: 16px; overflow: hidden; }
+  .codebox pre { margin: 0; padding: 22px; font: 13.5px/1.8 var(--mono); color: #d9d9de; overflow-x: auto; min-height: 240px; }
+  .codebox .c { color: var(--dim); } .codebox .p { color: var(--orange); user-select: none; } .codebox .y { color: var(--gold); }
+  .codebox .copy { position: absolute; top: 12px; right: 12px; }
+  .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  .steps li { display: flex; gap: 16px; padding: 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+  .steps .n { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+    font: 800 14px var(--mono); color: var(--orange); border: 1px solid rgba(255,149,0,.35); background: rgba(255,149,0,.08); }
+  .steps b { display: block; margin-bottom: 2px; } .steps span { color: var(--muted); font-size: 15px; }
+
+  .arch { background: var(--panel); border: 1px solid var(--border); border-radius: 22px; padding: 26px; }
+  .arch svg { width: 100%; height: auto; display: block; }
+  .arch text { font-family: var(--mono); }
+  .dash { stroke-dasharray: 6 8; animation: dash 1.2s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -28; } }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .stats { grid-template-columns: 1fr 1fr; } }
+  .stat { border: 1px solid var(--border); border-radius: 18px; padding: 24px; background: var(--panel); }
+  .stat .num { font: 800 clamp(30px, 4vw, 44px) var(--mono); color: var(--gold); letter-spacing: -1px; }
+  .stat .lb { color: var(--muted); font-size: 14px; }
+
+  /* final cta */
+  .final { margin: 120px 0 0; padding: 80px 24px; text-align: center; border: 1px solid var(--border-hi); border-radius: 28px;
+    position: relative; overflow: hidden; background: radial-gradient(ellipse 70% 90% at 50% 120%, rgba(255,149,0,.25), transparent 70%), var(--panel); }
+  .final h2 { font-size: clamp(34px, 6vw, 70px); }
+  .final .ascii-rain { position: absolute; inset: 0; z-index: 0; opacity: .12; font: 12px/1.2 var(--mono); color: var(--orange);
+    white-space: pre; overflow: hidden; pointer-events: none; mask-image: linear-gradient(180deg, #000, transparent 85%); }
+  .final > *:not(.ascii-rain) { position: relative; z-index: 1; }
+
+  footer { margin-top: 90px; border-top: 1px solid var(--border); padding: 34px 0 50px; color: var(--dim); font-size: 14px; }
+  footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: center; }
+  footer a { color: var(--muted); } footer a:hover { color: var(--orange); }
+  footer .links { display: flex; gap: 22px; flex-wrap: wrap; }
+
+  /* reveal on scroll */
+  .rv { opacity: 0; transform: translateY(26px); transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); }
+  .rv.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition: none !important; }
+    .rv { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow" id="glow"></div>
+<div class="bg-grain"></div>
+
+<header class="site">
+  <div class="wrap row">
+    <a class="brand" href="#top"><span class="chip">&gt;_</span><span>COTT<b>Y</b></span></a>
+    <nav>
+      <a href="#demo">Demo</a>
+      <a href="#features">Features</a>
+      <a href="#security">Security</a>
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a class="gh x" href="https://x.com/cottytech" target="_blank" rel="noopener" aria-label="Cotty on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+      <a class="gh" href="https://github.com/tylerbroqs/cotty" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <!-- ═════════ HERO ═════════ -->
+  <div class="wrap hero">
+    <span class="pill"><span class="tag">OPEN SOURCE</span><span class="dot"></span>MIT · one Go binary · Linux &amp; macOS</span>
+
+    <div class="banner-wrap">
+      <pre class="banner" id="banner" aria-label="COTTY"></pre>
+    </div>
+    <div class="tagline">the multiplayer terminal</div>
+
+    <h1 class="headline">Your shell. Your guests.<br><span class="grad">Type <span class="rot" id="rot">together</span></span><span class="caret"></span></h1>
+    <p class="sub">Host your terminal, let teammates join from <b>any terminal or a browser</b> — watch together, and when you allow it, type together. End-to-end encrypted, per-guest permissions, and a trail of who typed what.</p>
+
+    <div class="install">
+      <code><span class="p">$ </span>go install github.com/tylerbroqs/cotty/cmd/cotty@latest</code>
+      <button class="copy" data-copy="go install github.com/tylerbroqs/cotty/cmd/cotty@latest">copy</button>
+    </div>
+    <div class="cta">
+      <a class="btn primary" href="#install">Get started →</a>
+      <a class="btn ghost" href="https://github.com/tylerbroqs/cotty" target="_blank" rel="noopener">★ Star on GitHub</a>
+    </div>
+    <div><div class="ca"><span class="tk">$COTTY</span><span class="lb">official CA</span><code>0x8b39b55857cea6d173af2b5bb1144c2633739960</code><button class="copy" data-copy="0x8b39b55857cea6d173af2b5bb1144c2633739960">copy</button></div></div>
+    <div class="ca-warn">Only trust this contract address — anything else is not official.</div>
+
+    <!-- ═════════ LIVE DEMO ═════════ -->
+    <div class="stage rv" id="demo">
+      <div class="demo">
+        <div class="main" style="position:relative">
+          <div class="bar">
+            <span class="l"></span><span class="l"></span><span class="l"></span>
+            <span class="title">tyler@devbox — cotty host --relay relay.example.com:7374</span>
+            <span class="e2ee">🔒 E2EE</span>
+          </div>
+          <div class="presence" id="presence"><span class="count" id="count">waiting for guests…</span></div>
+          <div class="term" id="term"></div>
+          <div class="toast" id="toast"></div>
+        </div>
+        <aside class="side">
+          <h4><span>audit · pair.jsonl</span><span class="rec">rec</span></h4>
+          <div class="audit" id="audit"></div>
+          <div class="wire">
+            <div class="lbl">what the relay sees</div>
+            <div class="cipher" id="cipher"></div>
+          </div>
+        </aside>
+      </div>
+      <div class="demo-caption">↑ simulated session — <button id="replayBtn">replay</button></div>
+    </div>
+  </div>
+
+  <!-- ═════════ MARQUEE ═════════ -->
+  <div class="marquee" aria-hidden="true">
+    <div class="track" id="track"></div>
+  </div>
+
+  <!-- ═════════ FEATURES ═════════ -->
+  <section id="features">
+    <div class="wrap">
+      <div class="rv">
+        <div class="eyebrow">// features</div>
+        <h2>Pair programming, <span class="grad">minus the screen share.</span></h2>
+        <p class="lead">First-class sessions with per-guest permissions, live presence, accountability and real encryption — not a Zoom window of your terminal.</p>
+      </div>
+      <div class="bento">
+        <div class="card w4 rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9l3 3-3 3M12 15h5"/></svg></div>
+          <h3>Host anywhere, join from anything</h3>
+          <p><code>cotty host</code> spawns your shell in a PTY and serves it over a websocket. Your local terminal stays attached as usual. Guests join with <code>cotty join</code> — or straight from a browser, no install needed.</p>
+          <div class="mini"><span class="c">$</span> cotty host --write
+<span class="d">cotty: session code</span> <span class="y">XJ4K2P</span>
+<span class="d">cotty: guests join with:</span> cotty join "ws://192.168.1.10:7373/ws?code=XJ4K2P"
+
+<span class="c">$</span> cotty join -name alice "ws://192.168.1.10:7373/ws?code=XJ4K2P"</div>
+        </div>
+        <div class="card w2 rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>Guests can't type. Until you say so.</h3>
+          <p>View-only by default. Grant, revoke and kick live — try it:</p>
+          <div class="perm" id="perm">
+            <div class="p-row"><span class="av" style="background:var(--pink)">A</span><span class="nm">alice</span><span class="st">view-only</span><button class="switch" data-n="alice" aria-label="toggle alice"></button></div>
+            <div class="p-row"><span class="av" style="background:var(--cyan)">B</span><span class="nm">bob</span><span class="st">view-only</span><button class="switch" data-n="bob" aria-label="toggle bob"></button></div>
+            <div class="cmd" id="permCmd"><b>$</b> cotty ctl list</div>
+          </div>
+        </div>
+        <div class="card w2 half rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></div>
+          <h3>E2EE by default</h3>
+          <p>Relayed sessions are sealed with <code>AES-256-GCM</code>. The relay forwards ciphertext it cannot read.</p>
+        </div>
+        <div class="card w2 half rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M2 12h4l3-7 4 14 3-7h6"/></svg></div>
+          <h3>NAT-friendly relay</h3>
+          <p>The host dials <i>out</i> to <code>cotty relay</code>. No port forwarding on either side — home, office or coffee shop.</p>
+        </div>
+        <div class="card w2 rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></div>
+          <h3>Record &amp; replay</h3>
+          <p><code>-record session.cast</code> writes asciicast v2 — play it with <code>cotty replay</code> or asciinema.</p>
+        </div>
+        <div class="card w3 rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></div>
+          <h3>An audit trail of who typed what</h3>
+          <p>Every keystroke that reached the shell, attributed to the participant who typed it — plus joins, leaves, permission changes and kicks. Rejected input never runs, so it's never logged.</p>
+          <div class="mini"><span class="d">{</span><span class="y">"kind"</span>:<span class="g">"join"</span>,<span class="y">"who"</span>:<span class="g">"alice"</span><span class="d">}</span>
+<span class="d">{</span><span class="y">"kind"</span>:<span class="g">"input"</span>,<span class="y">"who"</span>:<span class="g">"alice"</span>,<span class="y">"data"</span>:<span class="g">"go test ./...\r"</span><span class="d">}</span></div>
+        </div>
+        <div class="card w3 rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 016 5.5"/></svg></div>
+          <h3>Live presence &amp; session codes</h3>
+          <p>Everyone sees who joins, who leaves and who's typing. Every session is protected by a random join code, and guests leave with <code>Ctrl-]</code>.</p>
+          <div class="mini"><span class="c">$</span> cotty ctl list
+alice                     <span class="g">read-write</span>  joined 4m12s ago
+bob                       <span class="d">view-only</span>   joined 38s ago</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ SECURITY ═════════ -->
+  <section id="security">
+    <div class="wrap">
+      <div class="rv center">
+        <div class="eyebrow">// end-to-end encryption</div>
+        <h2>The relay sees <span class="grad">noise.</span></h2>
+        <p class="lead">The host generates a 256-bit session key and puts it in the join URL's <i>fragment</i> — the part after <code style="color:var(--gold)">#</code> that clients strip before any request is made.</p>
+      </div>
+      <div class="e2ee-box rv">
+        <div class="url"><span class="s">cotty join "ws://relay.example.com:7374/ws?code=XJ4K2P</span><span class="frag">#k=8D0Uy-5ugL…</span><span class="s">"</span></div>
+        <div class="url-note">↑ never sent over the network</div>
+        <div class="flow">
+          <div class="node host"><div class="t">host</div><div class="v" id="fHost">$ git push</div><span class="lk">🔑 has key</span></div>
+          <div class="pipe"><span class="pk"></span><span class="pk"></span><span class="pk"></span></div>
+          <div class="node relay"><div class="t">relay</div><div class="v" id="fRelay">…</div><span class="lk">✕ no key</span></div>
+          <div class="pipe"><span class="pk"></span><span class="pk"></span><span class="pk"></span></div>
+          <div class="node guest"><div class="t">guest</div><div class="v" id="fGuest">$ git push</div><span class="lk">🔑 has key</span></div>
+        </div>
+        <div class="facts">
+          <div class="fact"><b>Wrong key fails loudly</b><span>A guest without the key is refused with an explanation — never shown garbage.</span></div>
+          <div class="fact"><b>WebCrypto in the browser</b><span>The browser client decrypts in-page. Code and key live in the fragment, which browsers never send.</span></div>
+          <div class="fact"><b>Honest about metadata</b><span>The relay still sees guest names, join/leave events, the code, terminal size and traffic timing.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ HOW IT WORKS ═════════ -->
+  <section id="how">
+    <div class="wrap two">
+      <div class="rv">
+        <div class="eyebrow">// how it works</div>
+        <h2>One PTY. <span class="grad">Everyone</span> attached.</h2>
+        <p class="lead" style="margin-bottom:28px">The host process owns the PTY. Local keystrokes — and guest keystrokes, if allowed — are written to it. Everything the PTY emits fans out to your terminal and every connected guest.</p>
+        <ol class="steps">
+          <li><span class="n">01</span><div><b>Host</b><span>Spawn your shell. Cotty prints a session code and a join URL.</span></div></li>
+          <li><span class="n">02</span><div><b>Share</b><span>Send the URL over a channel you trust — it carries the key.</span></div></li>
+          <li><span class="n">03</span><div><b>Collaborate</b><span>Guests watch. You <code style="color:var(--gold)">allow</code> who types. The trail remembers.</span></div></li>
+        </ol>
+      </div>
+      <div class="arch rv">
+        <svg viewBox="0 0 520 420" role="img" aria-label="Host PTY fans out through a relay to guests">
+          <defs>
+            <linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#ffd75f"/><stop offset="1" stop-color="#ff9500"/></linearGradient>
+          </defs>
+          <!-- host -->
+          <rect x="20" y="150" width="150" height="120" rx="16" fill="#060607" stroke="url(#g1)" stroke-width="1.5"/>
+          <text x="95" y="182" fill="#ffd75f" font-size="13" font-weight="700" text-anchor="middle">HOST</text>
+          <rect x="42" y="198" width="106" height="50" rx="9" fill="#15151a" stroke="#3a3a44"/>
+          <text x="95" y="220" fill="#5dd1a4" font-size="12" text-anchor="middle">PTY</text>
+          <text x="95" y="237" fill="#6a6a74" font-size="10.5" text-anchor="middle">your shell</text>
+          <!-- relay -->
+          <rect x="230" y="170" width="110" height="80" rx="14" fill="#060607" stroke="#3a3a44" stroke-dasharray="5 5"/>
+          <text x="285" y="205" fill="#a0a0aa" font-size="13" font-weight="700" text-anchor="middle">RELAY</text>
+          <text x="285" y="225" fill="#6a6a74" font-size="10.5" text-anchor="middle">ciphertext only</text>
+          <!-- guests -->
+          <g font-size="12" text-anchor="middle">
+            <rect x="400" y="60" width="100" height="56" rx="12" fill="#060607" stroke="#ff7ad9"/>
+            <text x="450" y="85" fill="#ff7ad9" font-weight="700">alice</text><text x="450" y="102" fill="#6a6a74" font-size="10">terminal · rw</text>
+            <rect x="400" y="182" width="100" height="56" rx="12" fill="#060607" stroke="#6cc7ff"/>
+            <text x="450" y="207" fill="#6cc7ff" font-weight="700">bob</text><text x="450" y="224" fill="#6a6a74" font-size="10">browser · view</text>
+            <rect x="400" y="304" width="100" height="56" rx="12" fill="#060607" stroke="#a98bff"/>
+            <text x="450" y="329" fill="#a98bff" font-weight="700">sam</text><text x="450" y="346" fill="#6a6a74" font-size="10">terminal · view</text>
+          </g>
+          <!-- wires -->
+          <path d="M170 210 H230" stroke="#ff9500" stroke-width="2" fill="none" class="dash"/>
+          <path d="M340 200 C370 200 370 88 400 88" stroke="#ff7ad9" stroke-width="2" fill="none" class="dash"/>
+          <path d="M340 210 H400" stroke="#6cc7ff" stroke-width="2" fill="none" class="dash"/>
+          <path d="M340 220 C370 220 370 332 400 332" stroke="#a98bff" stroke-width="2" fill="none" class="dash"/>
+          <text x="200" y="198" fill="#6a6a74" font-size="9.5" text-anchor="middle">outbound</text>
+          <!-- local terminal -->
+          <rect x="35" y="320" width="120" height="44" rx="10" fill="#15151a" stroke="#3a3a44"/>
+          <text x="95" y="347" fill="#efeff1" font-size="11" text-anchor="middle">local terminal</text>
+          <path d="M95 270 V320" stroke="#ffd75f" stroke-width="2" fill="none" class="dash"/>
+          <text x="95" y="60" fill="#6a6a74" font-size="10.5" text-anchor="middle">JSON frames over websocket</text>
+          <text x="95" y="76" fill="#6a6a74" font-size="10.5" text-anchor="middle">— deliberately debuggable</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ INSTALL / COMMANDS ═════════ -->
+  <section id="install">
+    <div class="wrap two" style="align-items:start">
+      <div class="rv">
+        <div class="eyebrow">// get started</div>
+        <h2>Up and running <span class="grad">in 30 seconds.</span></h2>
+        <p class="lead" style="margin-bottom:26px">Requires Go 1.24+. Linux and macOS hosts; Windows guests should work too, since <code style="color:var(--gold)">join</code> uses no PTY.</p>
+        <div class="stats">
+          <div class="stat"><div class="num" data-to="1">0</div><div class="lb">binary</div></div>
+          <div class="stat"><div class="num" data-to="256">0</div><div class="lb">bit session key</div></div>
+          <div class="stat"><div class="num" data-to="0">0</div><div class="lb">ports to forward</div></div>
+          <div class="stat"><div class="num" data-to="0">0</div><div class="lb">CDN calls from the web client</div></div>
+        </div>
+      </div>
+      <div class="rv">
+        <div class="tabs" id="tabs"></div>
+        <div class="codebox"><button class="copy" id="tabCopy">copy</button><pre id="tabCode"></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ FINAL CTA ═════════ -->
+  <div class="wrap">
+    <div class="final rv">
+      <div class="ascii-rain" id="rain"></div>
+      <div class="eyebrow">// cotty = collaborative + tty</div>
+      <h2>Stop screen-sharing<br><span class="grad">your terminal.</span></h2>
+      <p class="lead" style="margin:0 auto 30px">Share the real thing. Open source, MIT licensed, built in the open.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/tylerbroqs/cotty" target="_blank" rel="noopener">View on GitHub →</a>
+        <a class="btn ghost" href="https://x.com/cottytech" target="_blank" rel="noopener">Follow @cottytech on 𝕏</a>
+      </div>
+      <div><div class="ca"><span class="tk">$COTTY</span><span class="lb">official CA</span><code>0x8b39b55857cea6d173af2b5bb1144c2633739960</code><button class="copy" data-copy="0x8b39b55857cea6d173af2b5bb1144c2633739960">copy</button></div></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap row">
+    <div class="brand" style="font-size:15px"><span class="chip">&gt;_</span><span>COTT<b>Y</b></span></div>
+    <div class="links">
+      <a href="https://x.com/cottytech" target="_blank" rel="noopener">X / Twitter</a>
+      <a href="https://github.com/tylerbroqs/cotty" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/tylerbroqs/cotty/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+      <a href="https://github.com/tylerbroqs/cotty/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+      <a href="https://github.com/tylerbroqs/cotty/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const sleep = ms => new Promise(r => setTimeout(r, reduce ? 0 : ms));
+  const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const GLYPHS = "█▓▒░╔╗╚╝║═<>/\\|#$%&*+=?!01";
+
+  /* ── banner: same ANSI-shadow wordmark the CLI prints, decoded in ── */
+  const BANNER = [
+    " ██████╗  ██████╗ ████████╗████████╗██╗   ██╗",
+    "██╔════╝ ██╔═══██╗╚══██╔══╝╚══██╔══╝╚██╗ ██╔╝",
+    "██║      ██║   ██║   ██║      ██║    ╚████╔╝ ",
+    "██║      ██║   ██║   ██║      ██║     ╚██╔╝  ",
+    "╚██████╗ ╚██████╔╝   ██║      ██║      ██║   ",
+    " ╚═════╝  ╚═════╝    ╚═╝      ╚═╝      ╚═╝   ",
+  ];
+  const bannerEl = $("#banner");
+  const cells = [];
+  bannerEl.innerHTML = BANNER.map((line, i) => [...line].map((ch, col) => {
+    if (ch === " ") return " ";
+    const cls = ch === "█" ? (i < 3 ? "b-top" : "b-bot") : "b-sh";
+    return `<span class="${cls}" data-c="${ch}" data-col="${col}">${ch}</span>`;
+  }).join("")).join("\n");
+  cells.push(...$$("span", bannerEl));
+  const decode = () => {
+    cells.forEach(s => { s.textContent = " "; s.classList.remove("scr"); });
+    cells.forEach(s => {
+      const start = +s.dataset.col * 22 + Math.random() * 180;
+      let t = 0;
+      const tick = () => {
+        t++;
+        if (t * 40 < start) { setTimeout(tick, 40); return; }
+        if (t * 40 < start + 260) {
+          s.textContent = GLYPHS[Math.random() * GLYPHS.length | 0];
+          s.classList.add("scr"); setTimeout(tick, 40);
+        } else { s.textContent = s.dataset.c; s.classList.remove("scr"); }
+      };
+      reduce ? (s.textContent = s.dataset.c) : tick();
+    });
+  };
+  decode();
+  // occasional glitch flicker
+  setInterval(() => {
+    if (reduce || document.hidden) return;
+    const pick = Array.from({ length: 10 }, () => cells[Math.random() * cells.length | 0]);
+    pick.forEach(s => { s.textContent = GLYPHS[Math.random() * GLYPHS.length | 0]; s.classList.add("scr"); });
+    setTimeout(() => pick.forEach(s => { s.textContent = s.dataset.c; s.classList.remove("scr"); }), 110);
+  }, 2600);
+  bannerEl.addEventListener("mouseenter", decode);
+
+  /* ── rotating word in the headline ── */
+  const words = ["together", "safely", "live", "anywhere", "on record"];
+  let wi = 0; const rot = $("#rot");
+  setInterval(async () => {
+    if (reduce) return;
+    const cur = rot.textContent;
+    for (let i = cur.length; i >= 0; i--) { rot.textContent = cur.slice(0, i); await sleep(35); }
+    wi = (wi + 1) % words.length;
+    for (let i = 1; i <= words[wi].length; i++) { rot.textContent = words[wi].slice(0, i); await sleep(70); }
+  }, 3400);
+
+  /* ── mouse-follow glow + card spotlight ── */
+  addEventListener("pointermove", e => {
+    $("#glow").style.setProperty("--mx", e.clientX + "px");
+    $("#glow").style.setProperty("--my", e.clientY + "px");
+  }, { passive: true });
+  $$(".card").forEach(c => c.addEventListener("pointermove", e => {
+    const r = c.getBoundingClientRect();
+    c.style.setProperty("--x", e.clientX - r.left + "px");
+    c.style.setProperty("--y", e.clientY - r.top + "px");
+  }));
+
+  /* ── copy buttons ── */
+  const copy = async (btn, text) => {
+    try { await navigator.clipboard.writeText(text); } catch { /* clipboard blocked */ }
+    btn.textContent = "copied ✓"; btn.classList.add("ok");
+    setTimeout(() => { btn.textContent = "copy"; btn.classList.remove("ok"); }, 1500);
+  };
+  $$("[data-copy]").forEach(b => b.addEventListener("click", () => copy(b, b.dataset.copy)));
+
+  /* ── marquee ── */
+  const items = ["view-only by default", "AES-256-GCM", "asciicast v2", "xterm.js in the browser", "NAT-friendly relay",
+    "who-typed-what audit trail", "live presence", "random session codes", "web client: zero CDN requests", "one Go binary", "MIT licensed"];
+  $("#track").innerHTML = [...items, ...items].map(t => `<span><i>✦</i>${t}</span>`).join("");
+
+  /* ── reveal on scroll + counters ── */
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("in");
+    $$(".num[data-to]", e.target).forEach(n => {
+      const to = +n.dataset.to; const t0 = performance.now();
+      const step = t => { const p = Math.min(1, (t - t0) / 1200); n.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
+    io.unobserve(e.target);
+  }), { threshold: .14 });
+  $$(".rv").forEach(el => io.observe(el));
+
+  /* ── permissions toy ── */
+  $$("#perm .switch").forEach(sw => sw.addEventListener("click", () => {
+    const on = sw.classList.toggle("on");
+    const st = sw.previousElementSibling;
+    st.textContent = on ? "read-write" : "view-only"; st.classList.toggle("rw", on);
+    $("#permCmd").innerHTML = `<b>$</b> cotty ctl ${on ? "allow" : "deny"} ${sw.dataset.n}`;
+  }));
+
+  /* ── command tabs ── */
+  const TABS = {
+    host: `<span class="c"># view-only guests</span>
+<span class="p">$ </span>cotty host
+<span class="c"># guests can type too</span>
+<span class="p">$ </span>cotty host --write
+
+<span class="c"># cotty prints:</span>
+<span class="c">#   cotty: session code <span class="y">XJ4K2P</span></span>`,
+    join: `<span class="c"># from any terminal</span>
+<span class="p">$ </span>cotty join -name alice "ws://192.168.1.10:7373/ws?code=XJ4K2P"
+
+<span class="c"># or a browser — no install</span>
+<span class="c">#   http://relay:7374/join#code=XJ4K2P&k=…</span>
+
+<span class="c"># press Ctrl-] to leave</span>`,
+    relay: `<span class="c"># on a public server</span>
+<span class="p">$ </span>cotty relay -addr :7374
+<span class="p">$ </span>cotty relay -addr :7374 -public-url wss://relay.example.com
+
+<span class="c"># on your machine, anywhere — no port forwarding</span>
+<span class="p">$ </span>cotty host --relay relay.example.com:7374`,
+    ctl: `<span class="c"># from the host machine — or inside the hosted shell</span>
+<span class="p">$ </span>cotty ctl list          <span class="c"># who's here, who can type</span>
+<span class="p">$ </span>cotty ctl allow alice   <span class="c"># let alice type</span>
+<span class="p">$ </span>cotty ctl deny alice    <span class="c"># back to view-only</span>
+<span class="p">$ </span>cotty ctl kick bob      <span class="c"># disconnect bob</span>`,
+    record: `<span class="c"># record the session + keep a who-did-what trail</span>
+<span class="p">$ </span>cotty host -record pairing.cast -audit pairing.jsonl
+
+<span class="c"># play it back (2x, long pauses capped)</span>
+<span class="p">$ </span>cotty replay -speed 2 pairing.cast`,
+    build: `<span class="p">$ </span>go install github.com/tylerbroqs/cotty/cmd/cotty@latest
+
+<span class="c"># or from source</span>
+<span class="p">$ </span>git clone https://github.com/tylerbroqs/cotty
+<span class="p">$ </span>cd cotty
+<span class="p">$ </span>go build -o cotty ./cmd/cotty`,
+  };
+  const tabsEl = $("#tabs"), codeEl = $("#tabCode");
+  const show = k => {
+    $$(".tab", tabsEl).forEach(t => t.classList.toggle("on", t.dataset.k === k));
+    codeEl.innerHTML = TABS[k];
+  };
+  tabsEl.innerHTML = Object.keys(TABS).map(k => `<button class="tab" data-k="${k}">${k}</button>`).join("");
+  tabsEl.addEventListener("click", e => e.target.dataset.k && show(e.target.dataset.k));
+  $("#tabCopy").addEventListener("click", e => {
+    const lines = codeEl.textContent.split("\n").filter(l => l.startsWith("$ ")).map(l => l.slice(2).replace(/\s+#.*$/, ""));
+    copy(e.currentTarget, lines.join("\n"));
+  });
+  show("host");
+
+  /* ── ciphertext streams ── */
+  const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const noise = n => Array.from({ length: n }, () => B64[Math.random() * 64 | 0]).join("");
+  const cipherEl = $("#cipher"), fRelay = $("#fRelay");
+  setInterval(() => { if (!document.hidden) { cipherEl.textContent = noise(150); fRelay.textContent = noise(22); } }, 140);
+  const plain = ["$ git push", "$ go test ./...", "$ make deploy", "$ vim main.go", "$ ls -la"];
+  let pi = 0;
+  setInterval(() => { pi = (pi + 1) % plain.length; $("#fHost").textContent = $("#fGuest").textContent = plain[pi]; }, 2200);
+
+  /* ── final CTA ascii rain ── */
+  const rain = $("#rain");
+  const drawRain = () => { rain.textContent = Array.from({ length: 34 }, () => noise(220).replace(/[A-Z]/g, " ")).join("\n"); };
+  drawRain(); setInterval(() => { if (!document.hidden) drawRain(); }, 900);
+
+  /* ═════════ the scripted multiplayer session ═════════ */
+  const term = $("#term"), presence = $("#presence"), audit = $("#audit"), toast = $("#toast"), count = $("#count");
+  const P = {
+    tyler: { color: "var(--gold)", label: "tyler (host)" },
+    alice: { color: "var(--pink)", label: "alice" },
+    bob:   { color: "var(--cyan)", label: "bob" },
+  };
+  let run = 0, guests = 0;
+  const PROMPT = `<span class="ps">tyler@devbox</span> <span class="pth">~/cotty</span> <span class="ct">$</span> `;
+
+  const line = (html = "") => {
+    const d = document.createElement("div"); d.className = "ln"; d.innerHTML = html; term.appendChild(d);
+    while (term.scrollHeight > term.clientHeight && term.children.length > 1) term.firstChild.remove();
+    return d;
+  };
+  const cursor = who => `<span class="cur flag" data-n="${who}" style="--c:${P[who].color}"></span>`;
+  const typeInto = async (el, who, text, id) => {
+    const base = el.innerHTML;
+    setTyping(who, true);
+    let out = "";
+    for (const ch of text) {
+      if (id !== run) return;
+      out += esc(ch);
+      el.innerHTML = base + `<span style="color:${who === "tyler" ? "inherit" : P[who].color}">${out}</span>` + cursor(who);
+      await sleep(38 + Math.random() * 70);
+    }
+    el.innerHTML = base + `<span style="color:${who === "tyler" ? "inherit" : P[who].color}">${out}</span>`;
+    setTyping(who, false);
+  };
+  const setTyping = (who, on) => { const w = $(`.who[data-w="${who}"]`, presence); if (w) w.classList.toggle("typing", on); };
+  const addWho = (who, mode) => {
+    const w = document.createElement("span"); w.className = "who"; w.dataset.w = who; w.style.color = P[who].color;
+    w.innerHTML = `<span class="av" style="background:${P[who].color}">${who[0].toUpperCase()}</span><span style="color:var(--text)">${P[who].label}</span><span class="mode ${mode === "read-write" ? "rw" : ""}">${mode}</span>`;
+    presence.insertBefore(w, count);
+  };
+  const setMode = (who, mode) => { const m = $(`.who[data-w="${who}"] .mode`, presence); if (m) { m.textContent = mode; m.classList.toggle("rw", mode === "read-write"); } };
+  const updCount = () => { count.textContent = guests ? `${guests} guest${guests > 1 ? "s" : ""} connected` : "waiting for guests…"; };
+  const say = async (msg, ms = 2400) => { toast.innerHTML = msg; toast.classList.add("show"); await sleep(ms); toast.classList.remove("show"); };
+  const log = (kind, who, extra = "") => {
+    const r = document.createElement("div"); r.className = "row";
+    const t = new Date().toISOString().slice(11, 19);
+    r.innerHTML = `{<span class="k">"time"</span>:"${t}",<span class="k">"kind"</span>:<span class="s">"${kind}"</span>` +
+      (who ? `,<span class="k">"who"</span>:<span class="s">"${who}"</span>` : "") + extra + "}";
+    audit.appendChild(r);
+    while (audit.children.length > 7) audit.firstChild.remove();
+  };
+  const dataField = s => `,<span class="k">"data"</span>:<span class="s">"${esc(s)}\\r"</span>`;
+  const noteField = s => `,<span class="k">"note"</span>:<span class="s">"${esc(s)}"</span>`;
+
+  async function session() {
+    const id = ++run;
+    term.innerHTML = ""; audit.innerHTML = ""; guests = 0; $$(".who", presence).forEach(w => w.remove()); updCount();
+    addWho("tyler", "host");
+    const ok = () => id === run;
+
+    let l = line(PROMPT); await sleep(500);
+    await typeInto(l, "tyler", "cotty host --relay relay.example.com:7374 -audit pair.jsonl", id); if (!ok()) return;
+    await sleep(350);
+    line(`<span class="mute">cotty: hosting /bin/zsh via relay relay.example.com:7374 </span><span class="ok">(end-to-end encrypted)</span><span class="mute"> (guests are view-only by default)</span>`); await sleep(160);
+    line(`<span class="mute">cotty: session code </span><span class="gold">XJ4K2P</span>`); await sleep(160);
+    line(`<span class="mute">cotty: guests join with: </span>cotty join "ws://relay.example.com:7374/ws?code=XJ4K2P<span class="gold">#k=8D0Uy-5ugL…</span>"`); await sleep(160);
+    line(`<span class="mute">cotty: or in a browser: http://relay.example.com:7374/join#code=XJ4K2P&amp;k=…</span>`); await sleep(160);
+    line(`<span class="mute">cotty: audit trail at pair.jsonl</span>`); await sleep(900); if (!ok()) return;
+
+    guests = 1; addWho("alice", "view-only"); updCount(); log("join", "alice");
+    line(`<span class="ct">cotty: alice joined (1 connected)</span>`);
+    l = line(PROMPT); await sleep(1100); if (!ok()) return;
+
+    setTyping("alice", true);
+    await say(`<span style="color:var(--pink)">alice</span> tried to type — <b style="color:var(--text)">your connection is view-only</b>; input never reached the shell`, 2300);
+    setTyping("alice", false); if (!ok()) return;
+
+    await typeInto(l, "tyler", "cotty ctl allow alice", id); if (!ok()) return;
+    setMode("alice", "read-write"); log("allow", "alice");
+    l = line(PROMPT); await sleep(700); if (!ok()) return;
+
+    await typeInto(l, "alice", "go test ./...", id); if (!ok()) return;
+    log("input", "alice", dataField("go test ./..."));
+    await sleep(400);
+    for (const pkg of ["audit", "e2ee", "protocol", "relay", "session"]) {
+      line(`<span class="ok">ok</span>  \tgithub.com/tylerbroqs/cotty/internal/${pkg}\t${(Math.random() * .4 + .01).toFixed(3)}s`);
+      await sleep(220); if (!ok()) return;
+    }
+    l = line(PROMPT); await sleep(800);
+
+    guests = 2; addWho("bob", "view-only"); updCount(); log("join", "bob", noteField("browser"));
+    line(`<span class="ct">cotty: bob joined (2 connected)</span>`);
+    await say(`<span style="color:var(--cyan)">bob</span> joined from a <b style="color:var(--text)">browser</b> — no install, decrypted with WebCrypto`, 2200); if (!ok()) return;
+
+    l = line(PROMPT);
+    await typeInto(l, "alice", "git commit -am \"fix flaky relay test\" && git push", id); if (!ok()) return;
+    log("input", "alice", dataField("git commit -am \\\"fix flaky relay test\\\" && git push"));
+    await sleep(300);
+    line(`<span class="mute">[main 4f2c9e1] fix flaky relay test</span>`); await sleep(200);
+    line(`<span class="mute">To github.com:tylerbroqs/cotty.git</span>`); await sleep(200);
+    line(`   a91b03d..4f2c9e1  <span class="ok">main -&gt; main</span>`); await sleep(700); if (!ok()) return;
+
+    l = line(PROMPT);
+    await typeInto(l, "tyler", "cotty ctl kick bob", id); if (!ok()) return;
+    log("kick", "bob");
+    const b = $(`.who[data-w="bob"]`, presence); b && b.classList.add("gone"); setTimeout(() => b && b.remove(), 420);
+    guests = 1; updCount();
+    line(`<span class="ct">cotty: bob left (1 connected)</span>`);
+    l = line(PROMPT + cursor("tyler"));
+    await sleep(4200);
+    if (ok() && !reduce) session();
+  }
+
+  // start the demo when it scrolls into view
+  let started = false;
+  new IntersectionObserver(es => { if (es[0].isIntersecting && !started) { started = true; session(); } }, { threshold: .3 }).observe($("#demo"));
+  $("#replayBtn").addEventListener("click", session);
+})();
+</script>
+</body>
+</html>
