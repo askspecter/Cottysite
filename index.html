@@ -9,7 +9,9 @@
 <meta property="og:title" content="COTTY — the multiplayer terminal">
 <meta property="og:description" content="Your shell. Your guests. Your rules. A shared live terminal with E2EE, permissions, presence and an audit trail.">
 <meta name="theme-color" content="#060607">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23060607'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='20' font-weight='bold' fill='%23ff9500' text-anchor='middle'%3E%3E_%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta property="og:image" content="assets/cotty-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
@@ -68,9 +70,8 @@
   .brand { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-weight: 800;
     font-size: 18px; letter-spacing: 5px; color: var(--gold); }
   .brand b { color: var(--orange); }
-  .brand .chip { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
-    background: linear-gradient(135deg, var(--gold), var(--orange)); color: #160b00; font-size: 13px;
-    letter-spacing: 0; box-shadow: 0 0 22px rgba(255,149,0,.45); }
+  .brand .logo { width: 30px; height: 30px; border-radius: 8px; display: block;
+    box-shadow: 0 0 0 1px rgba(255,149,0,.3), 0 0 22px rgba(255,149,0,.35); }
   nav { display: flex; align-items: center; gap: 26px; }
   nav a { color: var(--muted); font-size: 14.5px; transition: color .15s; }
   nav a:hover { color: var(--text); }
@@ -369,7 +370,7 @@
 
 <header class="site">
   <div class="wrap row">
-    <a class="brand" href="#top"><span class="chip">&gt;_</span><span>COTT<b>Y</b></span></a>
+    <a class="brand" href="#top"><img class="logo" src="assets/cotty-logo.png" alt=""><span>COTT<b>Y</b></span></a>
     <nav>
       <a href="#demo">Demo</a>
       <a href="#features">Features</a>
@@ -623,7 +624,7 @@ bob                       <span class="d">view-only</span>   joined 38s ago</div
 
 <footer>
   <div class="wrap row">
-    <div class="brand" style="font-size:15px"><span class="chip">&gt;_</span><span>COTT<b>Y</b></span></div>
+    <div class="brand" style="font-size:15px"><img class="logo" src="assets/cotty-logo.png" alt=""><span>COTT<b>Y</b></span></div>
     <div class="links">
       <a href="https://x.com/cottytech" target="_blank" rel="noopener">X / Twitter</a>
       <a href="https://github.com/tylerbroqs/cotty" target="_blank" rel="noopener">GitHub</a>
