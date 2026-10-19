@@ -123,7 +123,10 @@
     font-weight: 700; letter-spacing: -2px; max-width: 900px; }
   h1.headline .grad { background: linear-gradient(100deg, var(--gold) 10%, var(--orange) 55%, #ff5e00 90%);
     -webkit-background-clip: text; background-clip: text; color: transparent; }
-  h1.headline .rot { display: inline-block; min-width: 4ch; text-align: left; }
+  h1.headline .rot { display: inline-block; min-width: 4ch; text-align: left;
+    /* iOS Safari does not paint a parent's background-clip:text into inline-block children */
+    background: linear-gradient(100deg, var(--orange), #ff5e00); -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent; }
   h1.headline .caret { display: inline-block; width: .08em; height: .85em; vertical-align: -.06em;
     margin-left: .06em; background: var(--orange); animation: blink 1s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
