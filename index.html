@@ -310,6 +310,29 @@
   .fact { border: 1px solid var(--border); border-radius: 14px; padding: 18px; background: var(--bg); }
   .fact b { display: block; font-size: 15.5px; margin-bottom: 4px; } .fact span { color: var(--muted); font-size: 14px; }
 
+  /* desk */
+  .desk-term { background: rgba(11,11,13,.95); border: 1px solid var(--border-hi); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 40px 120px -30px rgba(0,0,0,.9), 0 0 80px -30px rgba(255,149,0,.35); }
+  .desk-term pre { margin: 0; padding: 20px 22px 22px; font: 12.6px/1.75 var(--mono); color: #d9d9de; overflow-x: auto; }
+  .desk-term .h { color: var(--dim); } .desk-term .s { color: var(--gold); font-weight: 600; } .desk-term .up { color: var(--green); }
+  .desk-term .dn { color: var(--red); } .desk-term .fl { color: var(--orange); } .desk-term .al { color: var(--orange); }
+  .desk-term .lt { color: var(--cyan); font-weight: 600; } .desk-term .m { color: var(--muted); }
+  .desk-cap { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 10px; font: 12px var(--mono); color: var(--dim); }
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  .col { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+  .col b { display: block; font: 700 13px var(--mono); color: var(--gold); letter-spacing: .5px; margin-bottom: 6px; }
+  .col span { color: var(--muted); font-size: 14.5px; }
+  .desk-run { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; margin-top: 14px; }
+  @media (max-width: 900px) { .desk-run { grid-template-columns: 1fr; } }
+  .desk-run .mini { margin-top: 0; }
+  .fine { border: 1px dashed var(--border-hi); border-radius: 16px; padding: 18px 20px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .fine b { color: var(--text); }
+  .pill.new { text-decoration: none; transition: border-color .15s; }
+  .pill.new:hover { border-color: var(--orange); color: var(--text); }
+  @media (max-width: 480px) { .pill.new .long { display: none; } }
+  .pill.new .tag { background: rgba(255,149,0,.15); color: var(--orange); }
+
   /* how it works / commands */
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
   @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
@@ -374,6 +397,7 @@
     <nav>
       <a href="#demo">Demo</a>
       <a href="#features">Features</a>
+      <a href="#desk">Desk</a>
       <a href="#security">Security</a>
       <a href="#how">How it works</a>
       <a href="#install">Install</a>
@@ -389,7 +413,7 @@
 <main id="top">
   <!-- ═════════ HERO ═════════ -->
   <div class="wrap hero">
-    <span class="pill"><span class="tag">OPEN SOURCE</span><span class="dot"></span>MIT · one Go binary · Linux &amp; macOS</span>
+    <a class="pill new" href="#desk"><span class="tag">NEW</span><span class="dot"></span>cotty desk<span class="long"> · Robinhood Chain market dashboard</span> →</a>
 
     <div class="banner-wrap">
       <pre class="banner" id="banner" aria-label="COTTY"></pre>
@@ -500,6 +524,52 @@
 alice                     <span class="g">read-write</span>  joined 4m12s ago
 bob                       <span class="d">view-only</span>   joined 38s ago</div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ DESK ═════════ -->
+  <section id="desk">
+    <div class="wrap">
+      <div class="rv">
+        <div class="eyebrow">// new · cotty desk</div>
+        <h2>Watch the market. <span class="grad">Together.</span></h2>
+        <p class="lead"><code style="color:var(--gold)">cotty desk</code> is a live, read-only dashboard for Robinhood Chain mainnet. Run it inside <code style="color:var(--gold)">cotty host</code> and the whole session watches the same screen.</p>
+      </div>
+      <div class="rv">
+        <div class="desk-term">
+          <div class="bar">
+            <span class="l"></span><span class="l"></span><span class="l"></span>
+            <span class="title">tyler@devbox — cotty desk</span>
+            <span class="e2ee">READ-ONLY</span>
+          </div>
+<pre><span class="h">SYMBOL         BID         ASK  SPREAD   CHAINLINK   Δ FEED  FEED AGE      GAP  FLAGS</span>
+<span class="s">TSLA</span>        367.00      367.38   0.10%      365.91   <span class="up">+0.35%</span>     3h20m   <span class="up">+2.00%</span>
+<span class="s">NVDA</span>        216.62      216.66   0.02%      217.07   <span class="dn">-0.20%</span>     8h17m   <span class="up">+0.06%</span>  <span class="fl">x1.0008</span>
+
+<span class="al">! TSLA has moved +2.00% since the regular session (Mon 15:59)</span>
+
+<span class="lt">LIGHTER</span><span class="h">   PERP MARK        SPOT    BASIS  FUNDING/8H      APR  CARRY</span>
+<span class="s">NVDA</span>        216.63      216.55   <span class="up">+0.04%</span>    <span class="up">+0.0032%</span>   <span class="up">+3.50%</span>  <span class="m">longs pay: long spot + short perp collects  (1 token = 1.0008 perp)</span>
+<span class="s">ETH</span>       2,387.19    2,383.52   <span class="up">+0.15%</span>    <span class="dn">-0.0096%</span>  <span class="dn">-10.51%</span>  <span class="m">shorts pay: long perp collects</span></pre>
+        </div>
+        <div class="desk-cap"><span>↑ example output from the cotty README</span><span>refreshes every 15s</span></div>
+      </div>
+      <div class="cols">
+        <div class="col rv"><b>BID / ASK · SPREAD</b><span>Live Stock Token quotes from Robinhood's read-only API, multiplier-adjusted per token.</span></div>
+        <div class="col rv"><b>CHAINLINK · Δ FEED</b><span>The token's Chainlink feed, read on-chain, and how far the live quote is from it. Addresses are discovered, not hardcoded.</span></div>
+        <div class="col rv"><b>GAP</b><span>Overnight and weekend moves: how far the quote has drifted from the last regular-session price the desk saw.</span></div>
+        <div class="col rv"><b>FLAGS</b><span><code style="color:var(--orange)">HALT</code>, <code style="color:var(--orange)">ORACLE-PAUSED</code> during corporate actions, <code style="color:var(--orange)">STALE</code> feeds, and non-unit multipliers.</span></div>
+        <div class="col rv"><b>LIGHTER PERPS</b><span>Each symbol's perp on Lighter against the spot it hedges: basis, funding per 8h and annualized carry.</span></div>
+        <div class="col rv"><b>ALERTS</b><span>Quote/feed disagreement and session gaps above <code style="color:var(--gold)">-alert</code>, funding above <code style="color:var(--gold)">-carry</code> APR.</span></div>
+      </div>
+      <div class="desk-run">
+        <div class="mini rv"><span class="c">$</span> cotty host -audit desk.jsonl   <span class="d"># then, inside the hosted shell:</span>
+<span class="c">$</span> cotty desk                       <span class="d"># default watch list</span>
+<span class="c">$</span> cotty desk -symbols TSLA,NVDA,SPY -alert 0.5
+<span class="c">$</span> cotty desk -symbols all          <span class="d"># every Stock Token with a feed</span>
+<span class="c">$</span> cotty desk -once                 <span class="d"># one snapshot</span></div>
+        <div class="fine rv"><b>Holds no keys, signs nothing, deploys nothing.</b> It only reads public data. Funding is variable and fees, slippage and margin are ignored: it's a monitor, not a signal. Exchange holidays aren't modeled. Stock Tokens are not available to US persons and are restricted in other jurisdictions.</div>
       </div>
     </div>
   </section>
@@ -719,7 +789,7 @@ bob                       <span class="d">view-only</span>   joined 38s ago</div
 
   /* ── marquee ── */
   const items = ["view-only by default", "AES-256-GCM", "asciicast v2", "xterm.js in the browser", "NAT-friendly relay",
-    "who-typed-what audit trail", "live presence", "random session codes", "web client: zero CDN requests", "one Go binary", "MIT licensed"];
+    "who-typed-what audit trail", "cotty desk: Robinhood Chain", "Lighter basis & funding", "live presence", "random session codes", "web client: zero CDN requests", "one Go binary", "MIT licensed"];
   $("#track").innerHTML = [...items, ...items].map(t => `<span><i>✦</i>${t}</span>`).join("");
 
   /* ── reveal on scroll + counters ── */
@@ -775,6 +845,13 @@ bob                       <span class="d">view-only</span>   joined 38s ago</div
 
 <span class="c"># play it back (2x, long pauses capped)</span>
 <span class="p">$ </span>cotty replay -speed 2 pairing.cast`,
+    desk: `<span class="c"># inside a hosted session, so everyone watches</span>
+<span class="p">$ </span>cotty desk
+<span class="p">$ </span>cotty desk -symbols TSLA,NVDA,SPY -alert 0.5
+<span class="p">$ </span>cotty desk -carry 10 -interval 30s
+
+<span class="c"># one snapshot, no screen clearing</span>
+<span class="p">$ </span>cotty desk -once`,
     build: `<span class="p">$ </span>go install github.com/tylerbroqs/cotty/cmd/cotty@latest
 
 <span class="c"># or from source</span>
